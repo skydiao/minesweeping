@@ -1,0 +1,322 @@
+#                     扫雷游戏项目说明文档
+
+​                                                                                                                                                        作者:黄程远
+
+#### 目录:
+
+#### 1.游戏功能说明
+
+
+
+#### 2.游戏设计过程
+
+
+
+#### 3.设计遇到的问题与解决办法
+
+
+
+#### 4.总结
+
+
+
+## 									游戏功能说明
+
+**1.**   **主界面，点击开始游戏进入游戏界面**
+
+**2.**   **游戏界面，左侧显示游戏内容，右侧则是游戏ui，目前有一个按键，用于切换扫雷和插旗模式，右侧显示时间**
+
+**3.**   **扫雷模式下点击游戏区的任意格子，根据格子的内容显示不同结果，是雷就直接游戏失败，是旗子则无法有效点击，是数字会直接显示，是空白格则会显示周围所有的非雷非旗格**
+
+**4.**   **游戏胜利或者游戏失败均可选择回到主界面或者再次进行游戏**
+
+
+
+## 									游戏设计过程
+
+**1 ** **首先画出了思维导图，确定了项目的难点和必须的硬件软件功能，并且创建了相应的文件。**  
+
+![1693017105977](C:\Users\ok\AppData\Roaming\Typora\typora-user-images\1693017105977.png)
+
+**2**   **手动绘制了最基本的游戏素材，比如游戏背景图和必须的雷 旗子 空白格之类的素材**
+
+![1693017180785](C:\Users\ok\AppData\Roaming\Typora\typora-user-images\1693017180785.png)
+
+**3**   **将基本的素材都上传到了开发板，并且将游戏必须的底层功能完成，比如触摸获取坐标，显示bmp图片等**
+
+ 
+
+**4**  **将所有的底层函数封装起来，以此调用完成了主界面的创建**  
+
+```c
+/*
+    初始化显示屏幕
+*/
+int init_lcd();
+/*
+    关闭显示屏幕
+*/
+void deinit_lcd();
+/*
+    画点
+    @x     x坐标
+    @y     y坐标
+    @color 颜色
+*/
+void lcd_draw_point(int x,int y,int color);
+/*
+    显示bmp图片
+    @x            x坐标
+    @y            y坐标
+    @bmp_path     图片路径
+*/
+void show_bmp(int x,int y,char *bmp_path);
+```
+
+**5**  **正式开始游戏功能的搭建，我首先完成了生成雷的函数，然后初步通过输出函数确定了函数的功能正确性**  
+
+```c
+//开启新一局游戏，把所有数据清空
+void clean()
+{
+    //将雷数，胜利条件，模式全部还原,雷分布
+    flag = -1;
+    time_ = 0;
+    Mines = 10;
+    game_win = 81;
+    game_Mode = 2;
+    for(int i = 0;i<9;i++)
+    {
+        for(int j = 0;j<9;j++)
+        {
+            game_board[i][j] = 0;
+            if_flag[i][j] = 0;
+        }
+    }
+}
+
+void creat_game()
+{
+    //先清除棋盘,重置雷数
+    clean();
+    //设置随机数种子
+    srand((unsigned int)time(NULL));
+    //循环生成10个雷
+    while(Mines--)
+    {
+        while(1)
+        {
+            //获取0到80的随机数
+            int ret = rand();
+            ret = ret % Game_difficulty;
+            //在随机的位置生成雷
+            if(game_board[ret/9][ret%9] == 0)
+            {
+                game_board[ret/9][ret%9] = 10;
+                //根据周围的雷数来确定数字
+                get_num_ByMines(ret/9,ret%9);
+                printf("%d\n",ret);
+                break;
+            }
+        }
+    }
+}
+```
+
+**6**   **雷生成完成后，我通过雷的位置来完成了数字的生成，原理是把雷的周围遍历一遍，将所有非雷的区域数字加一，这样叠加起来就完成了游戏的初始化。**  
+
+```c
+/*
+    通过雷的位置初始化雷周围的数字
+    @rows 行
+    @cols 列
+*/
+void get_num_ByMines(int rows,int cols);
+```
+
+**7**   **开始完成交互功能，当我点击游戏区域时，要根据雷 数字 空白的不同来显示不同的效果，主要难点是解决点击空白的问题。**
+
+```c
+//游戏的显示效果
+int game_show(Array *index)
+{
+    printf("%d %d \n",index->y,index->x);
+    //点击到雷并且未插旗判断为失败
+    if(game_board[index->y][index->x] == 10 && if_flag[index->y][index->x] != 1)
+    {
+        return 0;
+    }//点击到空白处而且未插旗
+    else if(game_board[index->y][index->x] == 0 && if_flag[index->y][index->x] != 1)//未插旗才允许点击
+    {
+        show_bmp(index->x*50,index->y*50+15,pic_nothing);
+        game_board[index->y][index->x] = 9;
+        game_win--;
+        game_show_blank(index->y,index->x);
+        return 1;
+    }//点击到数字处而且未插旗
+    else if(game_board[index->y][index->x] <= 8 && if_flag[index->y][index->x] != 1)//未插旗才允许点击
+    {
+        show_bmp(index->x*50,index->y*50+15,pic_num[game_board[index->y][index->x]-1]);
+        game_board[index->y][index->x] = 9;
+        game_win--;
+        return 1;
+    }
+}
+```
+
+**8**  **因为点击空白的块时，需要显示它周围的所有非雷块，所以我用上了递归的方式解决，当空白块的周围有空白块时，我就递归调用函数(见上)**
+
+
+
+**9**  **基本功能完成了，接下来就完成胜利和失败的函数编写。失败很容易，点击到雷就判定为失败。胜利需要判断剩余的格子数目，当剩余格子数目和雷的数目一致时，则判断游戏胜利，在这里我用了一个全局变量，每点击一个块它就自减**  
+
+```c
+/*
+    游戏失败的显示界面
+*/
+void game_defeat();
+/*
+    游戏胜利时的界面
+*/
+void game_victoty();
+```
+
+**10**  **完成所有功能，这里可以开始添加其余功能了……** 
+
+ ![1693017877704](C:\Users\ok\AppData\Roaming\Typora\typora-user-images\1693017877704.png)
+
+**11 ** **增加了游戏中显示时间的功能，增加了游戏胜利后将时间作为成绩显示在下方的功能**  
+
+```c
+/*
+    线程函数，完成计时功能
+*/
+void *func(void *t)
+```
+
+**12** **增加了排行榜功能，在成绩达到排行榜水平时，会将成绩更新上去，在开始界面也可以点击排行榜查看**
+
+```c
+//读取排行榜
+void read_record(int *rank)
+{
+    FILE *fl = NULL;
+    fl = fopen(txt_record, "r+");
+    char record[10] = {0};
+    int count = 0;
+    while(!feof(fl))
+    {
+        fgets(record, 10, fl);
+        rank[count] = atoi(record);
+        //printf("%c %c %c %d\n",record[0],record[1],record[2],rank[count]);
+        count++;
+    }
+    return;
+}
+
+//显示排行榜信息
+void show_rank()
+
+//更新排行榜信息
+int updata_rank(unsigned int time)
+{
+    FILE *fl = NULL;
+    fl = fopen(txt_record, "r+");
+    char record[10] = {0};
+    int rec[3] = {0};
+    int count = 0;
+    int flag = 0;
+    int mid = 999;
+    while(!feof(fl))
+    {
+        fgets(record, 10, fl);
+        rec[count] = atoi(record);
+        if(mid < rec[count])
+        {
+            int t;
+            t = rec[count];
+            rec[count] = mid;
+            mid = t;
+        }
+        if(rec[count] > time && flag == 0)
+        {
+            flag = 1;
+            mid = rec[count];
+            rec[count] = time;
+        }
+        count++;
+    }
+    //fputs(const char *s, FILE *stream);
+    fclose(fl);
+    char new_record[5];
+    fl = fopen(txt_record, "w+");
+    count = 0;
+    while(count <= 2)
+    {
+        new_record[0] = 48 + rec[count]/100;
+        new_record[1] = 48 + rec[count]%100/10;
+        new_record[2] = 48 + rec[count]%10;
+        new_record[3] = '\n';
+        new_record[4] = '\0';
+        printf("%s\n",new_record);
+        fputs(new_record, fl);
+        count++;
+    }
+    fclose(fl);
+    return flag;
+}
+```
+
+
+
+## 								问题和解决办法
+
+**1**    **一开始的时候，我在显示图片时就产生了问题，一些非全屏的图片只会显示一些零星的像素点，在经过排查后我确定了是自己的lcd显示bmp算法出了问题**
+
+**解决办法：** **经过排查，我发现是自己遗漏了bmp一行像素点必须是4的倍数的问题，所以会出现一些图片能正常显示，一些不能的问题。**  
+
+
+
+**2**     **在写出产生雷的算法后，我迟迟想不出产生数字的算法，一开始我的解决方案是遍历保存格子的数组，一个一个格子来确定数字**  
+
+**解决办法：** **我在写出这个算法后发现这个算法产生的时间复杂度太高了，所以我换了一种算法，通过扫描雷的周围来确定数字，这样通过空间换时间的方式解决了问题**  
+
+
+
+**3**   **因为在电脑上是鼠标左右键来进行游戏，而在开发板上只有触摸屏，只能完成一种事件，所以不能很好的切换扫雷和插旗的选项**
+
+**解决办法：** **我通过在屏幕上设置一个按键，来完成了扫雷和插旗的切换，也就是点击按键，就可以从插旗（扫雷）模式转换为扫雷（插旗）模式。**  
+
+
+
+##                                             总结
+
+**1** **做项目前做好规划，写好思维导图，一步一步完成功能，完成某个功能后要多次测试，避免出错**
+
+
+
+**2** **每完成一次更新，都要对这次更新进行一次备份，以免下次更新后产生无法挽回的错误**
+
+
+
+
+
+
+
+
+
+
+
+​						
+
+
+
+
+
+
+
+
+
+# minesweeping
+# minesweeping
+# minesweeping
